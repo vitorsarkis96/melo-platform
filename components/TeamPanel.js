@@ -33,10 +33,16 @@ function downloadPDF(a, company) {
     .notes{font-size:13px;line-height:1.7;color:#333;background:#f8f7f4;border-radius:8px;padding:14px}
     .divider{border:none;border-top:1px solid #eee;margin:20px 0}
     ul{padding-left:16px;line-height:1.9;font-size:12px;color:#333}
+    .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .header img{height:28px;width:auto}
     @media print{body{padding:24px}@page{margin:16mm}}
   </style></head><body>
+  <div class="header">
+    <img src="${LOGO}" alt="Melo" />
+    <span style="font-size:11px;color:#aaa">Diagnóstico estratégico · Método Melo</span>
+  </div>
   <h1>${company}</h1>
-  <p class="meta">Diagnóstico estratégico · Método Melo · ${new Date().toLocaleDateString('pt-BR')}</p>
+  <p class="meta">${new Date().toLocaleDateString('pt-BR')}</p>
   <hr class="divider">
   <div class="grid2">
     <div class="box"><div class="label">Missão</div><div class="value">${a.missao || '—'}</div></div>
@@ -196,143 +202,87 @@ function Diagnosis({ a }) {
   )
 }
 
-function TokenManager() {
-  const [tokens, setTokens] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [label, setLabel] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [newToken, setNewToken] = useState(null)
+function NewProjectModal({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [err, setErr] = useState('')
 
-  const load = async () => {
-    setLoading(true)
-    const res = await fetch('/api/tokens')
-    const data = await res.json()
-    setTokens((data.tokens || []).slice().reverse())
+  const create = async () => {
+    if (!name.trim()) return
+    setLoading(true); setErr('')
+    try {
+      const res = await fetch('/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: name.trim() }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error)
+      const link = `${window.location.origin}/questionario?t=${data.token}`
+      setResult({ token: data.token, link, company: name.trim() })
+      onCreated()
+    } catch (e) {
+      setErr(e.message)
+    }
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
-
-  const create = async () => {
-    if (!label.trim()) return
-    setCreating(true)
-    const res = await fetch('/api/tokens', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: label.trim() }),
-    })
-    const data = await res.json()
-    if (data.ok) {
-      setNewToken(data.token)
-      setLabel('')
-      load()
-    }
-    setCreating(false)
-  }
-
-  const remove = async (code) => {
-    await fetch('/api/tokens', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    })
-    load()
-  }
-
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  const tokenUrl = newToken ? `${baseUrl}/questionario` : ''
-
-  const copy = (text) => {
-    navigator.clipboard.writeText(text)
+  const copy = () => {
+    navigator.clipboard.writeText(result.link)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      {/* Criar novo token */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <span className="label" style={{ display: 'block', marginBottom: 12 }}>Gerar código de acesso</span>
-        <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.5 }}>
-          Cada código é de uso único. Após o cliente enviar o questionário, o código é invalidado automaticamente.
-        </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            className="input"
-            type="text"
-            value={label}
-            onChange={e => setLabel(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && create()}
-            placeholder="Nome do cliente (ex: Ethiquê)"
-            style={{ flex: 1 }}
-          />
-          <button className="btn btn-primary" onClick={create} disabled={creating || !label.trim()}>
-            {creating ? <><span className="spin" /> Gerando...</> : '+ Gerar código'}
-          </button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+      <div className="card fade" style={{ width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <h3 className="syne" style={{ fontSize: 16, fontWeight: 700 }}>Novo projeto</h3>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
         </div>
-      </div>
 
-      {/* Token recém criado */}
-      {newToken && (
-        <div className="card fade" style={{ marginBottom: '1.5rem', borderColor: 'var(--amber-border)' }}>
-          <span className="label" style={{ color: 'var(--amber)', display: 'block', marginBottom: 8 }}>Código gerado — envie ao cliente</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 16px', textAlign: 'center' }}>
-              <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--amber)', fontFamily: 'monospace' }}>
-                {newToken.code}
-              </span>
-            </div>
-            <button className="btn" onClick={() => copy(newToken.code)} style={{ flexShrink: 0 }}>
-              {copied ? '✓ Copiado' : 'Copiar código'}
-            </button>
-          </div>
-          <div style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {baseUrl}/questionario
-            </span>
-            <button className="btn btn-sm" onClick={() => copy(`${baseUrl}/questionario`)} style={{ flexShrink: 0 }}>Copiar link</button>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10 }}>
-            Envie o link + código ao cliente. O código é válido para um único envio.
-          </p>
-        </div>
-      )}
-
-      {/* Lista de tokens */}
-      <span className="label" style={{ display: 'block', marginBottom: 10 }}>Códigos emitidos</span>
-
-      {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}>
-          <span className="spin" /> carregando...
-        </div>
-      )}
-
-      {!loading && tokens.length === 0 && (
-        <p style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhum código gerado ainda.</p>
-      )}
-
-      {!loading && tokens.map(t => (
-        <div key={t.code} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', marginBottom: 6, gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, letterSpacing: '0.1em', color: t.used ? 'var(--text3)' : 'var(--amber)' }}>
-              {t.code}
-            </span>
-            <span style={{ fontSize: 13, color: 'var(--text2)' }}>{t.label}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className={`badge ${t.used ? 'badge-gray' : 'badge-green'}`} style={{ fontSize: 10 }}>
-              {t.used ? 'utilizado' : 'disponível'}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(t.ts).toLocaleDateString('pt-BR')}</span>
-            {!t.used && (
-              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red-text)', fontSize: 12 }} onClick={() => remove(t.code)}>
-                Revogar
+        {!result ? (
+          <>
+            <label className="label" style={{ marginBottom: 6, display: 'block' }}>Nome da empresa cliente</label>
+            <input className="input" type="text" value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && create()}
+              placeholder="Ex: Ethiquê Perícias" style={{ marginBottom: '1rem' }} autoFocus />
+            {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+              <button className="btn btn-primary" onClick={create} disabled={loading || !name.trim()}>
+                {loading ? <><span className="spin" /> Gerando...</> : 'Gerar link de acesso'}
               </button>
-            )}
+            </div>
+          </>
+        ) : (
+          <div className="fade">
+            <div className="card-surface" style={{ marginBottom: '1rem' }}>
+              <span className="label" style={{ display: 'block', marginBottom: 6 }}>Projeto criado</span>
+              <p style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{result.company}</p>
+              <p style={{ fontSize: 12, color: 'var(--text3)' }}>Código: <span style={{ fontFamily: 'monospace', color: 'var(--amber)' }}>{result.token}</span></p>
+            </div>
+
+            <label className="label" style={{ display: 'block', marginBottom: 6 }}>Link para enviar ao cliente</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: '1.25rem' }}>
+              <input className="input" readOnly value={result.link} style={{ flex: 1, fontSize: 12, color: 'var(--text2)' }} onClick={e => e.target.select()} />
+              <button className="btn btn-primary" onClick={copy} style={{ flexShrink: 0 }}>
+                {copied ? '✓ Copiado' : 'Copiar'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <a href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue o link para preencher o questionário de marca da Melo Creative:\n\n${result.link}`)}`}
+                target="_blank" rel="noopener noreferrer" className="btn" style={{ flex: 1, justifyContent: 'center', textDecoration: 'none' }}>
+                Enviar via WhatsApp
+              </a>
+              <button className="btn btn-ghost" onClick={onClose}>Fechar</button>
+            </div>
           </div>
-        </div>
-      ))}
+        )}
+      </div>
     </div>
   )
 }
@@ -346,7 +296,7 @@ export default function TeamPanel() {
   const [analyzing, setAnalyzing] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
-  const [mainTab, setMainTab] = useState('projects') // 'projects' | 'tokens'
+  const [showModal, setShowModal] = useState(false)
 
   const refresh = async () => {
     setLoading(true)
@@ -359,28 +309,30 @@ export default function TeamPanel() {
   useEffect(() => { refresh() }, [])
 
   const select = async item => {
+    const subId = item.submissionId || item.id
     setSel(item); setResponses(null); setAnalysis(null); setErr(''); setTab(0)
-    const res = await fetch(`/api/submission/${item.id}`)
+    const res = await fetch(`/api/submission/${subId}`)
     const data = await res.json()
     setResponses(data.submission)
-    const aRes = await fetch(`/api/submission/${item.id}/analysis`)
+    const aRes = await fetch(`/api/submission/${subId}/analysis`)
     const aData = await aRes.json()
     if (aData.analysis) setAnalysis(aData.analysis)
   }
 
   const analyze = async () => {
     if (!responses) return
+    const subId = sel.submissionId || sel.id
     setAnalyzing(true); setErr('')
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: sel.id, responses }),
+        body: JSON.stringify({ id: subId, responses }),
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error || 'Erro na análise')
       setAnalysis(data.analysis)
-      setIndex(prev => prev.map(i => i.id === sel.id ? { ...i, status: 'analyzed' } : i))
+      setIndex(prev => prev.map(i => (i.id === sel.id) ? { ...i, status: 'analyzed' } : i))
       setSel(s => ({ ...s, status: 'analyzed' }))
       setTab(1)
     } catch (e) {
@@ -389,136 +341,130 @@ export default function TeamPanel() {
     setAnalyzing(false)
   }
 
+  const statusLabel = (s) => {
+    if (s === 'analyzed') return { label: 'analisado', cls: 'badge-green' }
+    if (s === 'pending') return { label: 'respondido', cls: 'badge-amber' }
+    return { label: 'aguardando', cls: 'badge-gray' }
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {showModal && (
+        <NewProjectModal
+          onClose={() => setShowModal(false)}
+          onCreated={() => { refresh(); setShowModal(false) }}
+        />
+      )}
+
       <nav className="nav">
         <a href="/"><img src={LOGO} alt="Melo" style={{ height: 30, width: 'auto' }} /></a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            className={`btn btn-sm${mainTab === 'projects' ? '' : ' btn-ghost'}`}
-            onClick={() => setMainTab('projects')}
-          >
-            Projetos
-          </button>
-          <button
-            className={`btn btn-sm${mainTab === 'tokens' ? '' : ' btn-ghost'}`}
-            onClick={() => setMainTab('tokens')}
-          >
-            Códigos de acesso
-          </button>
-          {mainTab === 'projects' && (
-            <button className="btn btn-sm btn-ghost" onClick={refresh}>↻</button>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>Painel da equipe</span>
+          <button className="btn btn-sm btn-ghost" onClick={refresh}>↻</button>
+          <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}>+ Novo projeto</button>
         </div>
       </nav>
 
-      {/* TOKENS TAB */}
-      {mainTab === 'tokens' && (
-        <div style={{ flex: 1, padding: '1.5rem' }}>
-          <TokenManager />
-        </div>
-      )}
-
-      {/* PROJECTS TAB */}
-      {mainTab === 'projects' && (
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <div style={{ width: 220, borderRight: '1px solid var(--border)', padding: '1rem', flexShrink: 0, overflowY: 'auto' }}>
-            <span className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>Projetos recebidos</span>
-
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}>
-                <span className="spin" /> carregando...
-              </div>
-            )}
-
-            {!loading && (!index || index.length === 0) && (
-              <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
-                Nenhum questionário recebido ainda.
-              </p>
-            )}
-
-            {!loading && (index || []).slice().reverse().map(item => (
-              <div key={item.id} className={`sidebar-item${sel?.id === item.id ? ' active' : ''}`} onClick={() => select(item)}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ width: 230, borderRight: '1px solid var(--border)', padding: '1rem', flexShrink: 0, overflowY: 'auto' }}>
+          <span className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>Projetos</span>
+          {loading && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}><span className="spin" /> carregando...</div>}
+          {!loading && (!index || index.length === 0) && (
+            <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>Nenhum projeto ainda.<br />Crie um com "+ Novo projeto".</p>
+          )}
+          {!loading && (index || []).slice().reverse().map(item => {
+            const st = statusLabel(item.status)
+            return (
+              <div key={item.id} className={`sidebar-item${sel?.id === item.id ? ' active' : ''}`}
+                onClick={() => item.submissionId || item.status === 'pending' || item.status === 'analyzed' ? select(item) : null}
+                style={{ opacity: (item.status === 'aguardando') ? 0.6 : 1, cursor: item.status === 'aguardando' ? 'default' : 'pointer' }}>
                 <p style={{ fontSize: 13, fontWeight: sel?.id === item.id ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
                   {item.company}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(item.ts).toLocaleDateString('pt-BR')}</span>
-                  <span className={`badge ${item.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`} style={{ fontSize: 10 }}>
-                    {item.status === 'analyzed' ? 'analisado' : 'pendente'}
-                  </span>
+                  <span className={`badge ${st.cls}`} style={{ fontSize: 10 }}>{st.label}</span>
                 </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
+        </div>
 
-          <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
-            {!sel && (
-              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text2)' }}>
-                <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: 'var(--text)' }}>Selecione um projeto</p>
-                <p style={{ fontSize: 13 }}>Escolha um questionário para visualizar as respostas e gerar o diagnóstico.</p>
-              </div>
-            )}
+        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
+          {!sel && (
+            <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text2)' }}>
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: 'var(--text)' }}>Selecione um projeto</p>
+              <p style={{ fontSize: 13, marginBottom: '1.5rem' }}>Projetos com status "aguardando" ainda não foram respondidos pelo cliente.</p>
+              <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Criar novo projeto</button>
+            </div>
+          )}
 
-            {sel && (
-              <div className="fade">
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{responses?.nome || sel.company}</h2>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>Recebido em {new Date(sel.ts).toLocaleDateString('pt-BR')}</span>
-                      <span className={`badge ${sel.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`}>
-                        {sel.status === 'analyzed' ? 'diagnóstico gerado' : 'aguardando análise'}
-                      </span>
-                    </div>
+          {sel && (
+            <div className="fade">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{responses?.nome || sel.company}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text2)' }}>Criado em {new Date(sel.ts).toLocaleDateString('pt-BR')}</span>
+                    <span className={`badge ${statusLabel(sel.status).cls}`}>{statusLabel(sel.status).label}</span>
+                    {sel.token && <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>#{sel.token}</span>}
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {analysis && (
-                      <button className="btn" onClick={() => downloadPDF(analysis, responses?.nome || sel.company)}>
-                        ↓ Baixar PDF
-                      </button>
-                    )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {analysis && (
+                    <button className="btn" onClick={() => downloadPDF(analysis, responses?.nome || sel.company)}>
+                      ↓ PDF
+                    </button>
+                  )}
+                  {(sel.status === 'pending' || sel.status === 'analyzed') && (
                     <button className="btn btn-primary" onClick={analyze} disabled={analyzing || !responses}>
                       {analyzing ? <><span className="spin" /> Analisando...</> : (analysis ? 'Reanalisar' : 'Gerar diagnóstico')}
                     </button>
-                  </div>
+                  )}
                 </div>
-
-                {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
-
-                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-                  {['Respostas brutas', 'Template estratégico'].map((t, i) => (
-                    <button key={i} className={`tab${tab === i ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</button>
-                  ))}
-                </div>
-
-                {tab === 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {responses
-                      ? Object.entries(responses).filter(([k]) => !k.startsWith('_')).map(([k, v]) => (
-                        <div key={k} className="card-surface" style={{ padding: '0.75rem 1rem' }}>
-                          <span className="label" style={{ marginBottom: 3, display: 'block' }}>{QLABELS[k] || k}</span>
-                          <p style={{ fontSize: 13, lineHeight: 1.6 }}>{Array.isArray(v) ? v.join(' · ') : v || '—'}</p>
-                        </div>
-                      ))
-                      : <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}><span className="spin" /> carregando...</div>
-                    }
-                  </div>
-                )}
-
-                {tab === 1 && !analysis && (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
-                    <p style={{ marginBottom: 8, fontSize: 14 }}>Diagnóstico ainda não gerado.</p>
-                    <p style={{ fontSize: 12 }}>Clique em "Gerar diagnóstico" para analisar com IA.</p>
-                  </div>
-                )}
-
-                {tab === 1 && analysis && <Diagnosis a={analysis} />}
               </div>
-            )}
-          </div>
+
+              {sel.status === 'aguardando' && (
+                <div className="alert alert-warn" style={{ marginBottom: '1rem' }}>
+                  O cliente ainda não respondeu o questionário. Compartilhe o link de acesso com ele.
+                </div>
+              )}
+
+              {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
+
+              {(sel.status === 'pending' || sel.status === 'analyzed') && (
+                <>
+                  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
+                    {['Respostas brutas', 'Template estratégico'].map((t, i) => (
+                      <button key={i} className={`tab${tab === i ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</button>
+                    ))}
+                  </div>
+                  {tab === 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {responses
+                        ? Object.entries(responses).filter(([k]) => !k.startsWith('_')).map(([k, v]) => (
+                          <div key={k} className="card-surface" style={{ padding: '0.75rem 1rem' }}>
+                            <span className="label" style={{ marginBottom: 3, display: 'block' }}>{QLABELS[k] || k}</span>
+                            <p style={{ fontSize: 13, lineHeight: 1.6 }}>{Array.isArray(v) ? v.join(' · ') : v || '—'}</p>
+                          </div>
+                        ))
+                        : <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}><span className="spin" /> carregando...</div>
+                      }
+                    </div>
+                  )}
+                  {tab === 1 && !analysis && (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
+                      <p style={{ marginBottom: 8, fontSize: 14 }}>Diagnóstico não gerado ainda.</p>
+                      <p style={{ fontSize: 12 }}>Clique em "Gerar diagnóstico" acima.</p>
+                    </div>
+                  )}
+                  {tab === 1 && analysis && <Diagnosis a={analysis} />}
+                </>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
