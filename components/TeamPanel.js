@@ -3,6 +3,104 @@
 import { useState, useEffect } from 'react'
 import { QLABELS } from '../lib/steps'
 
+function downloadPDF(a, company) {
+  const p = a.personalidade || {}
+  const axisBar = (value) => {
+    const pct = Math.round(((value - 1) / 9) * 100)
+    return `<div style="height:4px;background:#eee;border-radius:2px;margin-top:4px"><div style="height:100%;width:${pct}%;background:#C8974A;border-radius:2px"></div></div>`
+  }
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>Diagnóstico — ${company}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#1a1a1a;padding:32px;background:#fff}
+    h1{font-size:22px;font-weight:700;margin-bottom:4px}
+    .meta{font-size:12px;color:#888;margin-bottom:24px}
+    .label{font-size:10px;font-weight:600;color:#888;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+    .box{background:#f8f7f4;border-radius:8px;padding:12px}
+    .value{font-size:13px;line-height:1.6;color:#1a1a1a}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500;background:#faeeda;color:#633806;margin:2px}
+    .badge-gray{background:#f0ede8;color:#555}
+    .pilar{margin-bottom:8px}
+    .pilar-word{font-weight:600;color:#C8974A;font-size:13px}
+    .tension{font-size:12px;color:#666;line-height:1.7;margin-bottom:4px;padding-left:12px;border-left:2px solid #e07070}
+    .axis-row{margin-bottom:10px}
+    .axis-labels{display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:3px}
+    .notes{font-size:13px;line-height:1.7;color:#333;background:#f8f7f4;border-radius:8px;padding:14px}
+    .divider{border:none;border-top:1px solid #eee;margin:20px 0}
+    ul{padding-left:16px;line-height:1.9;font-size:12px;color:#333}
+    @media print{body{padding:24px}@page{margin:16mm}}
+  </style></head><body>
+  <h1>${company}</h1>
+  <p class="meta">Diagnóstico estratégico · Método Melo · ${new Date().toLocaleDateString('pt-BR')}</p>
+  <hr class="divider">
+  <div class="grid2">
+    <div class="box"><div class="label">Missão</div><div class="value">${a.missao || '—'}</div></div>
+    <div class="box"><div class="label">Visão</div><div class="value">${a.visao || '—'}</div></div>
+    <div class="box"><div class="label">Propósito</div><div class="value">Verbo central: ${a.proposito_verbo || '—'}</div></div>
+    <div class="box"><div class="label">Posicionamento</div><div class="value">${a.posicionamento || '—'}</div></div>
+  </div>
+  <div class="grid3">
+    <div class="box">
+      <div class="label">Valores</div>
+      <div style="margin-top:6px">${(a.valores || []).map(v => `<span class="badge">${v}</span>`).join('')}</div>
+    </div>
+    <div class="box">
+      <div class="label">Entregas racionais</div>
+      <ul>${(a.entregas_racionais || []).map(e => `<li>${e}</li>`).join('')}</ul>
+    </div>
+    <div class="box">
+      <div class="label">Entregas emocionais</div>
+      <ul>${(a.entregas_emocionais || []).map(e => `<li>${e}</li>`).join('')}</ul>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="box">
+      <div class="label">Arquétipos</div>
+      <div style="margin:6px 0">
+        <span class="badge">${a.arquetipos?.dominante || '—'} (dominante)</span>
+        <span class="badge badge-gray">${a.arquetipos?.secundario || '—'} (secundário)</span>
+      </div>
+      <div class="value" style="font-size:12px;color:#555;margin-top:6px">${a.arquetipos?.justificativa || ''}</div>
+    </div>
+    <div class="box">
+      <div class="label">Pilares de marca</div>
+      <div style="margin-top:8px">
+        ${(a.pilares || []).map(p => `<div class="pilar"><span class="pilar-word">${p.palavra}</span> <span style="color:#888;font-size:12px">— ${p.conceito}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="box" style="margin-bottom:12px">
+    <div class="label" style="margin-bottom:12px">Alinhamento de personalidade</div>
+    ${[
+      ['Feminino', 'Masculino', p.feminino_masculino],
+      ['Conservador', 'Ousado', p.conservador_ousado],
+      ['Formal', 'Informal', p.formal_informal],
+      ['Tecnológico', 'Artesanal', p.tecnologico_artesanal],
+      ['Emocional', 'Racional', p.emocional_racional],
+    ].map(([l, r, v]) => `
+    <div class="axis-row">
+      <div class="axis-labels"><span>${l}</span><span>${r}</span></div>
+      ${axisBar(v || 5)}
+    </div>`).join('')}
+  </div>
+  ${a.contradicoes?.length > 0 ? `
+  <div class="box" style="margin-bottom:12px;border-left:3px solid #e07070">
+    <div class="label" style="color:#a32d2d;margin-bottom:8px">Tensões estratégicas</div>
+    ${(a.contradicoes || []).map(c => `<div class="tension">${c}</div>`).join('')}
+  </div>` : ''}
+  <div class="label" style="margin-bottom:6px">Notas para o designer</div>
+  <div class="notes">${a.notas_estrategicas || '—'}</div>
+  </body></html>`
+
+  const win = window.open('', '_blank')
+  win.document.write(html)
+  win.document.close()
+  win.onload = () => win.print()
+}
+
 function AxisRow({ left, right, value }) {
   const pct = Math.round(((value - 1) / 9) * 100)
   return (
@@ -21,7 +119,6 @@ function Diagnosis({ a }) {
   const p = a.personalidade || {}
   return (
     <div className="fade" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {/* Missão / Visão / Propósito / Posicionamento */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
         {[['Missão', a.missao], ['Visão', a.visao], ['Propósito', 'Verbo central: ' + a.proposito_verbo], ['Posicionamento', a.posicionamento]].map(([t, v]) => (
           <div key={t} className="card-surface">
@@ -31,7 +128,6 @@ function Diagnosis({ a }) {
         ))}
       </div>
 
-      {/* Valores / Entregas */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
         <div className="card-surface">
           <span className="label">Valores</span>
@@ -53,7 +149,6 @@ function Diagnosis({ a }) {
         </div>
       </div>
 
-      {/* Arquétipos / Pilares */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
         <div className="card-surface">
           <span className="label">Arquétipos</span>
@@ -76,7 +171,6 @@ function Diagnosis({ a }) {
         </div>
       </div>
 
-      {/* Personalidade */}
       <div className="card-surface">
         <span className="label" style={{ marginBottom: 12, display: 'block' }}>Alinhamento de personalidade</span>
         <AxisRow left="Feminino" right="Masculino" value={p.feminino_masculino || 5} />
@@ -86,7 +180,6 @@ function Diagnosis({ a }) {
         <AxisRow left="Emocional" right="Racional" value={p.emocional_racional || 5} />
       </div>
 
-      {/* Tensões */}
       {a.contradicoes?.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--red-border)' }}>
           <span className="label" style={{ color: 'var(--red-text)', marginBottom: 8, display: 'block' }}>Tensões estratégicas identificadas</span>
@@ -98,7 +191,6 @@ function Diagnosis({ a }) {
         </div>
       )}
 
-      {/* Notas */}
       <div className="card-surface">
         <span className="label" style={{ marginBottom: 8, display: 'block' }}>Notas para o designer</span>
         <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }}>{a.notas_estrategicas}</p>
@@ -160,7 +252,6 @@ export default function TeamPanel() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Top nav */}
       <nav className="nav">
         <a href="/" className="nav-logo">Melo</a>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -170,7 +261,6 @@ export default function TeamPanel() {
       </nav>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
         <div style={{ width: 220, borderRight: '1px solid var(--border)', padding: '1rem', flexShrink: 0, overflowY: 'auto' }}>
           <span className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>Projetos recebidos</span>
 
@@ -201,7 +291,6 @@ export default function TeamPanel() {
           ))}
         </div>
 
-        {/* Main content */}
         <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
           {!sel && (
             <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text2)' }}>
@@ -212,7 +301,6 @@ export default function TeamPanel() {
 
           {sel && (
             <div className="fade">
-              {/* Header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{responses?.nome || sel.company}</h2>
@@ -223,21 +311,26 @@ export default function TeamPanel() {
                     </span>
                   </div>
                 </div>
-                <button className="btn btn-primary" onClick={analyze} disabled={analyzing || !responses}>
-                  {analyzing ? <><span className="spin" /> Analisando...</> : (analysis ? 'Reanalisar' : 'Gerar diagnóstico')}
-                </button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {analysis && (
+                    <button className="btn" onClick={() => downloadPDF(analysis, responses?.nome || sel.company)}>
+                      ↓ Baixar PDF
+                    </button>
+                  )}
+                  <button className="btn btn-primary" onClick={analyze} disabled={analyzing || !responses}>
+                    {analyzing ? <><span className="spin" /> Analisando...</> : (analysis ? 'Reanalisar' : 'Gerar diagnóstico')}
+                  </button>
+                </div>
               </div>
 
               {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
 
-              {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
                 {['Respostas brutas', 'Template estratégico'].map((t, i) => (
                   <button key={i} className={`tab${tab === i ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</button>
                 ))}
               </div>
 
-              {/* Respostas */}
               {tab === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {responses
@@ -252,13 +345,13 @@ export default function TeamPanel() {
                 </div>
               )}
 
-              {/* Diagnóstico */}
               {tab === 1 && !analysis && (
                 <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
                   <p style={{ marginBottom: 8, fontSize: 14 }}>Diagnóstico ainda não gerado.</p>
                   <p style={{ fontSize: 12 }}>Clique em "Gerar diagnóstico" para analisar com IA.</p>
                 </div>
               )}
+
               {tab === 1 && analysis && <Diagnosis a={analysis} />}
             </div>
           )}
