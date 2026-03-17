@@ -7,7 +7,7 @@ import { STEPS } from '../../lib/steps'
 function Field({ field, value, onChange }) {
   if (field.type === 'text') return (
     <div style={{ marginBottom: '1.25rem' }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 5, color: 'var(--text)' }}>
+      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 5 }}>
         {field.label}{field.req && <span style={{ color: 'var(--amber)', marginLeft: 3 }}>*</span>}
       </label>
       {field.hint && <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 7, lineHeight: 1.4 }}>{field.hint}</p>}
@@ -16,7 +16,7 @@ function Field({ field, value, onChange }) {
   )
   if (field.type === 'ta') return (
     <div style={{ marginBottom: '1.25rem' }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 5, color: 'var(--text)' }}>
+      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 5 }}>
         {field.label}{field.req && <span style={{ color: 'var(--amber)', marginLeft: 3 }}>*</span>}
       </label>
       {field.hint && <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 7, lineHeight: 1.4 }}>{field.hint}</p>}
@@ -50,12 +50,84 @@ function Field({ field, value, onChange }) {
   return null
 }
 
+function TokenGate({ onValid }) {
+  const [code, setCode] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [err, setErr] = useState('')
+
+  const validate = async () => {
+    if (!code.trim()) return
+    setChecking(true)
+    setErr('')
+    try {
+      const res = await fetch('/api/validate-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim() }),
+      })
+      const data = await res.json()
+      if (data.valid) {
+        onValid(code.trim().toUpperCase())
+      } else {
+        setErr(data.reason || 'Código inválido.')
+      }
+    } catch {
+      setErr('Erro ao verificar. Tente novamente.')
+    }
+    setChecking(false)
+  }
+
+  return (
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div style={{ maxWidth: 380, width: '100%' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div className="badge badge-amber" style={{ marginBottom: '1rem', fontSize: 11 }}>Acesso exclusivo</div>
+          <h2 className="syne" style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Questionário de Marca</h2>
+          <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+            Insira o código de acesso enviado pela equipe Melo para iniciar.
+          </p>
+        </div>
+
+        <div className="card">
+          <label className="label" style={{ marginBottom: 6 }}>Código de acesso</label>
+          <input
+            className="input"
+            type="text"
+            value={code}
+            onChange={e => setCode(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && validate()}
+            placeholder="Ex: A3X9KL"
+            style={{ textAlign: 'center', fontSize: 18, letterSpacing: '0.15em', fontWeight: 600, marginBottom: '1rem' }}
+            maxLength={8}
+          />
+          {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={validate}
+            disabled={checking || code.trim().length < 4}
+          >
+            {checking ? <><span className="spin" /> Verificando...</> : 'Acessar questionário'}
+          </button>
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: 12, color: 'var(--text3)' }}>
+          Não recebeu o código? Entre em contato com a equipe Melo.
+        </p>
+      </div>
+    </main>
+  )
+}
+
 export default function Questionario() {
+  const [token, setToken] = useState(null)
   const [step, setStep] = useState(0)
   const [vals, setVals] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
+
+  if (!token) return <TokenGate onValid={setToken} />
 
   const cur = STEPS[step]
   const set = (id, v) => setVals(p => ({ ...p, [id]: v }))
@@ -73,9 +145,10 @@ export default function Questionario() {
       const res = await fetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(vals),
+        body: JSON.stringify({ ...vals, _token: token }),
       })
-      if (!res.ok) throw new Error('Erro ao enviar.')
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Erro ao enviar.')
       setDone(true)
     } catch (e) {
       setErr(e.message)
@@ -108,15 +181,13 @@ export default function Questionario() {
   return (
     <main style={{ minHeight: '100vh', padding: '1.5rem 1rem' }}>
       <div style={{ maxWidth: 620, margin: '0 auto' }}>
-        {/* Nav */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
-            <span className="syne" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Melo</span>
+            <img src="https://static.wixstatic.com/media/d5c391_d5af66b67cf546a59d5b1c348c99e261~mv2.png/v1/fill/w_268,h_82,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Asset%202_2x.png" alt="Melo" style={{ height: 28, width: 'auto' }} />
           </Link>
           <span className="badge badge-amber" style={{ fontSize: 11 }}>Questionário de Marca</span>
         </div>
 
-        {/* Progress */}
         <div style={{ marginBottom: '1.75rem' }}>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             {STEPS.map((s, i) => (
@@ -129,7 +200,6 @@ export default function Questionario() {
           </div>
         </div>
 
-        {/* Fields */}
         <div className="card fade" key={step}>
           {cur.fields.map(f => (
             <Field key={f.id} field={f} value={vals[f.id]} onChange={v => set(f.id, v)} />
@@ -138,7 +208,6 @@ export default function Questionario() {
 
         {err && <div className="alert alert-err" style={{ marginTop: '1rem' }}>{err}</div>}
 
-        {/* Nav buttons */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.25rem', gap: 8 }}>
           {step > 0
             ? <button className="btn btn-ghost" onClick={() => setStep(s => s - 1)}>← Anterior</button>
@@ -150,6 +219,22 @@ export default function Questionario() {
               {submitting ? <><span className="spin" />Enviando...</> : 'Enviar questionário'}
             </button>
           }
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: '2.5rem' }}>
+          {[
+            { href: 'https://wa.me/5511954387151', title: 'WhatsApp' },
+            { href: 'https://www.melocreative.com.br', title: 'Site' },
+            { href: 'https://www.linkedin.com/company/amelocreative', title: 'LinkedIn' },
+            { href: 'https://instagram.com/amelocreative', title: 'Instagram' },
+          ].map(({ href, title }) => (
+            <a key={title} href={href} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, color: 'var(--text3)', textDecoration: 'none' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--amber)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
+              {title}
+            </a>
+          ))}
         </div>
       </div>
     </main>
