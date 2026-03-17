@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { QLABELS } from '../lib/steps'
 
+const LOGO = 'https://static.wixstatic.com/media/d5c391_d5af66b67cf546a59d5b1c348c99e261~mv2.png/v1/fill/w_268,h_82,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Asset%202_2x.png'
+
 function downloadPDF(a, company) {
   const p = a.personalidade || {}
   const axisBar = (value) => {
@@ -127,7 +129,6 @@ function Diagnosis({ a }) {
           </div>
         ))}
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
         <div className="card-surface">
           <span className="label">Valores</span>
@@ -148,7 +149,6 @@ function Diagnosis({ a }) {
           </ul>
         </div>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
         <div className="card-surface">
           <span className="label">Arquétipos</span>
@@ -170,7 +170,6 @@ function Diagnosis({ a }) {
           </div>
         </div>
       </div>
-
       <div className="card-surface">
         <span className="label" style={{ marginBottom: 12, display: 'block' }}>Alinhamento de personalidade</span>
         <AxisRow left="Feminino" right="Masculino" value={p.feminino_masculino || 5} />
@@ -179,7 +178,6 @@ function Diagnosis({ a }) {
         <AxisRow left="Tecnológico" right="Artesanal" value={p.tecnologico_artesanal || 5} />
         <AxisRow left="Emocional" right="Racional" value={p.emocional_racional || 5} />
       </div>
-
       {a.contradicoes?.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--red-border)' }}>
           <span className="label" style={{ color: 'var(--red-text)', marginBottom: 8, display: 'block' }}>Tensões estratégicas identificadas</span>
@@ -190,11 +188,151 @@ function Diagnosis({ a }) {
           </ul>
         </div>
       )}
-
       <div className="card-surface">
         <span className="label" style={{ marginBottom: 8, display: 'block' }}>Notas para o designer</span>
         <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }}>{a.notas_estrategicas}</p>
       </div>
+    </div>
+  )
+}
+
+function TokenManager() {
+  const [tokens, setTokens] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [label, setLabel] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newToken, setNewToken] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    const res = await fetch('/api/tokens')
+    const data = await res.json()
+    setTokens((data.tokens || []).slice().reverse())
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const create = async () => {
+    if (!label.trim()) return
+    setCreating(true)
+    const res = await fetch('/api/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: label.trim() }),
+    })
+    const data = await res.json()
+    if (data.ok) {
+      setNewToken(data.token)
+      setLabel('')
+      load()
+    }
+    setCreating(false)
+  }
+
+  const remove = async (code) => {
+    await fetch('/api/tokens', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    load()
+  }
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const tokenUrl = newToken ? `${baseUrl}/questionario` : ''
+
+  const copy = (text) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      {/* Criar novo token */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <span className="label" style={{ display: 'block', marginBottom: 12 }}>Gerar código de acesso</span>
+        <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.5 }}>
+          Cada código é de uso único. Após o cliente enviar o questionário, o código é invalidado automaticamente.
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="input"
+            type="text"
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && create()}
+            placeholder="Nome do cliente (ex: Ethiquê)"
+            style={{ flex: 1 }}
+          />
+          <button className="btn btn-primary" onClick={create} disabled={creating || !label.trim()}>
+            {creating ? <><span className="spin" /> Gerando...</> : '+ Gerar código'}
+          </button>
+        </div>
+      </div>
+
+      {/* Token recém criado */}
+      {newToken && (
+        <div className="card fade" style={{ marginBottom: '1.5rem', borderColor: 'var(--amber-border)' }}>
+          <span className="label" style={{ color: 'var(--amber)', display: 'block', marginBottom: 8 }}>Código gerado — envie ao cliente</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ flex: 1, background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 16px', textAlign: 'center' }}>
+              <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--amber)', fontFamily: 'monospace' }}>
+                {newToken.code}
+              </span>
+            </div>
+            <button className="btn" onClick={() => copy(newToken.code)} style={{ flexShrink: 0 }}>
+              {copied ? '✓ Copiado' : 'Copiar código'}
+            </button>
+          </div>
+          <div style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {baseUrl}/questionario
+            </span>
+            <button className="btn btn-sm" onClick={() => copy(`${baseUrl}/questionario`)} style={{ flexShrink: 0 }}>Copiar link</button>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10 }}>
+            Envie o link + código ao cliente. O código é válido para um único envio.
+          </p>
+        </div>
+      )}
+
+      {/* Lista de tokens */}
+      <span className="label" style={{ display: 'block', marginBottom: 10 }}>Códigos emitidos</span>
+
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}>
+          <span className="spin" /> carregando...
+        </div>
+      )}
+
+      {!loading && tokens.length === 0 && (
+        <p style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhum código gerado ainda.</p>
+      )}
+
+      {!loading && tokens.map(t => (
+        <div key={t.code} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', marginBottom: 6, gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, letterSpacing: '0.1em', color: t.used ? 'var(--text3)' : 'var(--amber)' }}>
+              {t.code}
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--text2)' }}>{t.label}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className={`badge ${t.used ? 'badge-gray' : 'badge-green'}`} style={{ fontSize: 10 }}>
+              {t.used ? 'utilizado' : 'disponível'}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(t.ts).toLocaleDateString('pt-BR')}</span>
+            {!t.used && (
+              <button className="btn btn-sm btn-ghost" style={{ color: 'var(--red-text)', fontSize: 12 }} onClick={() => remove(t.code)}>
+                Revogar
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -208,6 +346,7 @@ export default function TeamPanel() {
   const [analyzing, setAnalyzing] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
+  const [mainTab, setMainTab] = useState('projects') // 'projects' | 'tokens'
 
   const refresh = async () => {
     setLoading(true)
@@ -253,110 +392,133 @@ export default function TeamPanel() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <nav className="nav">
-        <a href="/" className="nav-logo">Melo</a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, color: 'var(--text2)' }}>Painel da equipe</span>
-          <button className="btn btn-sm btn-ghost" onClick={refresh}>↻ Atualizar</button>
+        <a href="/"><img src={LOGO} alt="Melo" style={{ height: 30, width: 'auto' }} /></a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            className={`btn btn-sm${mainTab === 'projects' ? '' : ' btn-ghost'}`}
+            onClick={() => setMainTab('projects')}
+          >
+            Projetos
+          </button>
+          <button
+            className={`btn btn-sm${mainTab === 'tokens' ? '' : ' btn-ghost'}`}
+            onClick={() => setMainTab('tokens')}
+          >
+            Códigos de acesso
+          </button>
+          {mainTab === 'projects' && (
+            <button className="btn btn-sm btn-ghost" onClick={refresh}>↻</button>
+          )}
         </div>
       </nav>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ width: 220, borderRight: '1px solid var(--border)', padding: '1rem', flexShrink: 0, overflowY: 'auto' }}>
-          <span className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>Projetos recebidos</span>
-
-          {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}>
-              <span className="spin" /> carregando...
-            </div>
-          )}
-
-          {!loading && (!index || index.length === 0) && (
-            <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
-              Nenhum questionário recebido ainda.
-            </p>
-          )}
-
-          {!loading && (index || []).slice().reverse().map(item => (
-            <div key={item.id} className={`sidebar-item${sel?.id === item.id ? ' active' : ''}`} onClick={() => select(item)}>
-              <p style={{ fontSize: 13, fontWeight: sel?.id === item.id ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
-                {item.company}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(item.ts).toLocaleDateString('pt-BR')}</span>
-                <span className={`badge ${item.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`} style={{ fontSize: 10 }}>
-                  {item.status === 'analyzed' ? 'analisado' : 'pendente'}
-                </span>
-              </div>
-            </div>
-          ))}
+      {/* TOKENS TAB */}
+      {mainTab === 'tokens' && (
+        <div style={{ flex: 1, padding: '1.5rem' }}>
+          <TokenManager />
         </div>
+      )}
 
-        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
-          {!sel && (
-            <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text2)' }}>
-              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: 'var(--text)' }}>Selecione um projeto</p>
-              <p style={{ fontSize: 13 }}>Escolha um questionário para visualizar as respostas e gerar o diagnóstico.</p>
-            </div>
-          )}
+      {/* PROJECTS TAB */}
+      {mainTab === 'projects' && (
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <div style={{ width: 220, borderRight: '1px solid var(--border)', padding: '1rem', flexShrink: 0, overflowY: 'auto' }}>
+            <span className="label" style={{ marginBottom: '0.75rem', display: 'block' }}>Projetos recebidos</span>
 
-          {sel && (
-            <div className="fade">
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 12, flexWrap: 'wrap' }}>
-                <div>
-                  <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{responses?.nome || sel.company}</h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: 'var(--text2)' }}>Recebido em {new Date(sel.ts).toLocaleDateString('pt-BR')}</span>
-                    <span className={`badge ${sel.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`}>
-                      {sel.status === 'analyzed' ? 'diagnóstico gerado' : 'aguardando análise'}
-                    </span>
+            {loading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}>
+                <span className="spin" /> carregando...
+              </div>
+            )}
+
+            {!loading && (!index || index.length === 0) && (
+              <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+                Nenhum questionário recebido ainda.
+              </p>
+            )}
+
+            {!loading && (index || []).slice().reverse().map(item => (
+              <div key={item.id} className={`sidebar-item${sel?.id === item.id ? ' active' : ''}`} onClick={() => select(item)}>
+                <p style={{ fontSize: 13, fontWeight: sel?.id === item.id ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
+                  {item.company}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{new Date(item.ts).toLocaleDateString('pt-BR')}</span>
+                  <span className={`badge ${item.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`} style={{ fontSize: 10 }}>
+                    {item.status === 'analyzed' ? 'analisado' : 'pendente'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto' }}>
+            {!sel && (
+              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text2)' }}>
+                <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 6, color: 'var(--text)' }}>Selecione um projeto</p>
+                <p style={{ fontSize: 13 }}>Escolha um questionário para visualizar as respostas e gerar o diagnóstico.</p>
+              </div>
+            )}
+
+            {sel && (
+              <div className="fade">
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{responses?.nome || sel.company}</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>Recebido em {new Date(sel.ts).toLocaleDateString('pt-BR')}</span>
+                      <span className={`badge ${sel.status === 'analyzed' ? 'badge-green' : 'badge-amber'}`}>
+                        {sel.status === 'analyzed' ? 'diagnóstico gerado' : 'aguardando análise'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {analysis && (
+                      <button className="btn" onClick={() => downloadPDF(analysis, responses?.nome || sel.company)}>
+                        ↓ Baixar PDF
+                      </button>
+                    )}
+                    <button className="btn btn-primary" onClick={analyze} disabled={analyzing || !responses}>
+                      {analyzing ? <><span className="spin" /> Analisando...</> : (analysis ? 'Reanalisar' : 'Gerar diagnóstico')}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {analysis && (
-                    <button className="btn" onClick={() => downloadPDF(analysis, responses?.nome || sel.company)}>
-                      ↓ Baixar PDF
-                    </button>
-                  )}
-                  <button className="btn btn-primary" onClick={analyze} disabled={analyzing || !responses}>
-                    {analyzing ? <><span className="spin" /> Analisando...</> : (analysis ? 'Reanalisar' : 'Gerar diagnóstico')}
-                  </button>
+
+                {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
+
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
+                  {['Respostas brutas', 'Template estratégico'].map((t, i) => (
+                    <button key={i} className={`tab${tab === i ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</button>
+                  ))}
                 </div>
+
+                {tab === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {responses
+                      ? Object.entries(responses).filter(([k]) => !k.startsWith('_')).map(([k, v]) => (
+                        <div key={k} className="card-surface" style={{ padding: '0.75rem 1rem' }}>
+                          <span className="label" style={{ marginBottom: 3, display: 'block' }}>{QLABELS[k] || k}</span>
+                          <p style={{ fontSize: 13, lineHeight: 1.6 }}>{Array.isArray(v) ? v.join(' · ') : v || '—'}</p>
+                        </div>
+                      ))
+                      : <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}><span className="spin" /> carregando...</div>
+                    }
+                  </div>
+                )}
+
+                {tab === 1 && !analysis && (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
+                    <p style={{ marginBottom: 8, fontSize: 14 }}>Diagnóstico ainda não gerado.</p>
+                    <p style={{ fontSize: 12 }}>Clique em "Gerar diagnóstico" para analisar com IA.</p>
+                  </div>
+                )}
+
+                {tab === 1 && analysis && <Diagnosis a={analysis} />}
               </div>
-
-              {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
-
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-                {['Respostas brutas', 'Template estratégico'].map((t, i) => (
-                  <button key={i} className={`tab${tab === i ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</button>
-                ))}
-              </div>
-
-              {tab === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {responses
-                    ? Object.entries(responses).filter(([k]) => !k.startsWith('_')).map(([k, v]) => (
-                      <div key={k} className="card-surface" style={{ padding: '0.75rem 1rem' }}>
-                        <span className="label" style={{ marginBottom: 3, display: 'block' }}>{QLABELS[k] || k}</span>
-                        <p style={{ fontSize: 13, lineHeight: 1.6 }}>{Array.isArray(v) ? v.join(' · ') : v || '—'}</p>
-                      </div>
-                    ))
-                    : <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)', fontSize: 12 }}><span className="spin" /> carregando...</div>
-                  }
-                </div>
-              )}
-
-              {tab === 1 && !analysis && (
-                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
-                  <p style={{ marginBottom: 8, fontSize: 14 }}>Diagnóstico ainda não gerado.</p>
-                  <p style={{ fontSize: 12 }}>Clique em "Gerar diagnóstico" para analisar com IA.</p>
-                </div>
-              )}
-
-              {tab === 1 && analysis && <Diagnosis a={analysis} />}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
