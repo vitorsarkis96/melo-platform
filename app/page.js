@@ -1,3 +1,8 @@
+'use client'
+
+import Link from 'next/link'
+// resto do arquivo igual
+
 import Link from 'next/link'
 
 export default function Home() {
