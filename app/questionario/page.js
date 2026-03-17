@@ -1,8 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { STEPS } from '../../lib/steps'
+
+const LOGO = 'https://static.wixstatic.com/media/d5c391_d5af66b67cf546a59d5b1c348c99e261~mv2.png/v1/fill/w_268,h_82,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Asset%202_2x.png'
+
+const SOCIALS = [
+  { href: 'https://wa.me/5511954387151', label: 'WhatsApp' },
+  { href: 'https://www.melocreative.com.br', label: 'Site' },
+  { href: 'https://www.linkedin.com/company/amelocreative', label: 'LinkedIn' },
+  { href: 'https://instagram.com/amelocreative', label: 'Instagram' },
+]
 
 function Field({ field, value, onChange }) {
   if (field.type === 'text') return (
@@ -50,84 +59,39 @@ function Field({ field, value, onChange }) {
   return null
 }
 
-function TokenGate({ onValid }) {
-  const [code, setCode] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [err, setErr] = useState('')
+function QuestionarioInner() {
+  const searchParams = useSearchParams()
+  const tokenParam = searchParams.get('t')
 
-  const validate = async () => {
-    if (!code.trim()) return
-    setChecking(true)
-    setErr('')
-    try {
-      const res = await fetch('/api/validate-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-      })
-      const data = await res.json()
-      if (data.valid) {
-        onValid(code.trim().toUpperCase())
-      } else {
-        setErr(data.reason || 'Código inválido.')
-      }
-    } catch {
-      setErr('Erro ao verificar. Tente novamente.')
-    }
-    setChecking(false)
-  }
-
-  return (
-    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
-      <div style={{ maxWidth: 380, width: '100%' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div className="badge badge-amber" style={{ marginBottom: '1rem', fontSize: 11 }}>Acesso exclusivo</div>
-          <h2 className="syne" style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Questionário de Marca</h2>
-          <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-            Insira o código de acesso enviado pela equipe Melo para iniciar.
-          </p>
-        </div>
-
-        <div className="card">
-          <label className="label" style={{ marginBottom: 6 }}>Código de acesso</label>
-          <input
-            className="input"
-            type="text"
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && validate()}
-            placeholder="Ex: A3X9KL"
-            style={{ textAlign: 'center', fontSize: 18, letterSpacing: '0.15em', fontWeight: 600, marginBottom: '1rem' }}
-            maxLength={8}
-          />
-          {err && <div className="alert alert-err" style={{ marginBottom: '1rem' }}>{err}</div>}
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={validate}
-            disabled={checking || code.trim().length < 4}
-          >
-            {checking ? <><span className="spin" /> Verificando...</> : 'Acessar questionário'}
-          </button>
-        </div>
-
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: 12, color: 'var(--text3)' }}>
-          Não recebeu o código? Entre em contato com a equipe Melo.
-        </p>
-      </div>
-    </main>
-  )
-}
-
-export default function Questionario() {
-  const [token, setToken] = useState(null)
+  const [tokenStatus, setTokenStatus] = useState('checking') // checking | valid | invalid | used | free
+  const [company, setCompany] = useState('')
   const [step, setStep] = useState(0)
   const [vals, setVals] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
 
-  if (!token) return <TokenGate onValid={setToken} />
+  useEffect(() => {
+    if (!tokenParam) {
+      setTokenStatus('free')
+      return
+    }
+    fetch(`/api/token?t=${tokenParam}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.valid) {
+          setTokenStatus('valid')
+          setCompany(data.company)
+          setVals(v => ({ ...v, nome: data.company }))
+        } else if (data.used) {
+          setTokenStatus('used')
+          setCompany(data.company)
+        } else {
+          setTokenStatus('invalid')
+        }
+      })
+      .catch(() => setTokenStatus('invalid'))
+  }, [tokenParam])
 
   const cur = STEPS[step]
   const set = (id, v) => setVals(p => ({ ...p, [id]: v }))
@@ -145,10 +109,9 @@ export default function Questionario() {
       const res = await fetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...vals, _token: token }),
+        body: JSON.stringify({ ...vals, _token: tokenParam || null }),
       })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || 'Erro ao enviar.')
+      if (!res.ok) throw new Error('Erro ao enviar.')
       setDone(true)
     } catch (e) {
       setErr(e.message)
@@ -156,11 +119,57 @@ export default function Questionario() {
     setSubmitting(false)
   }
 
+  // ── ESTADOS DE TOKEN ──────────────────────────────────────────────────────
+  if (tokenStatus === 'checking') return (
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)' }}>
+        <span className="spin" /> Verificando acesso...
+      </div>
+    </main>
+  )
+
+  if (tokenStatus === 'invalid') return (
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div style={{ textAlign: 'center', maxWidth: 400 }}>
+        <img src={LOGO} alt="Melo" style={{ height: 32, margin: '0 auto 1.5rem', display: 'block' }} />
+        <div className="card">
+          <p style={{ fontSize: 20, marginBottom: 8 }}>🔒</p>
+          <h2 className="syne" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Link inválido</h2>
+          <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+            Este link não é válido. Solicite um novo link de acesso à equipe Melo.
+          </p>
+          <a href="https://wa.me/5511954387151" target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-block', marginTop: '1.25rem', fontSize: 13, color: 'var(--amber)', fontWeight: 500, textDecoration: 'none' }}>
+            Falar com a Melo →
+          </a>
+        </div>
+      </div>
+    </main>
+  )
+
+  if (tokenStatus === 'used') return (
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div style={{ textAlign: 'center', maxWidth: 440 }}>
+        <img src={LOGO} alt="Melo" style={{ height: 32, margin: '0 auto 1.5rem', display: 'block' }} />
+        <div className="card">
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--green-bg)', border: '1px solid var(--green-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontSize: 20, color: 'var(--green-text)' }}>✓</div>
+          <h2 className="syne" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Questionário já enviado</h2>
+          <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--text)' }}>{company}</strong> já enviou o questionário de marca.<br />
+            A equipe Melo está preparando o diagnóstico.
+          </p>
+        </div>
+      </div>
+    </main>
+  )
+
+  // ── SUCESSO ───────────────────────────────────────────────────────────────
   if (done) return (
     <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
       <div className="fade" style={{ textAlign: 'center', maxWidth: 440 }}>
-        <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--green-bg)', border: '1px solid var(--green-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', fontSize: 24, color: 'var(--green-text)' }}>✓</div>
-        <h2 className="syne" style={{ fontSize: 22, fontWeight: 700, marginBottom: 10 }}>Questionário enviado</h2>
+        <img src={LOGO} alt="Melo" style={{ height: 32, margin: '0 auto 1.5rem', display: 'block' }} />
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--green-bg)', border: '1px solid var(--green-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', fontSize: 22, color: 'var(--green-text)' }}>✓</div>
+        <h2 className="syne" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Questionário enviado</h2>
         <p style={{ color: 'var(--text2)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
           A equipe Melo recebeu suas respostas.<br />
           O diagnóstico estratégico será preparado em breve.
@@ -178,14 +187,13 @@ export default function Questionario() {
     </main>
   )
 
+  // ── QUESTIONÁRIO ──────────────────────────────────────────────────────────
   return (
     <main style={{ minHeight: '100vh', padding: '1.5rem 1rem' }}>
       <div style={{ maxWidth: 620, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-          <Link href="/" style={{ textDecoration: 'none' }}>
-            <img src="https://static.wixstatic.com/media/d5c391_d5af66b67cf546a59d5b1c348c99e261~mv2.png/v1/fill/w_268,h_82,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Asset%202_2x.png" alt="Melo" style={{ height: 28, width: 'auto' }} />
-          </Link>
-          <span className="badge badge-amber" style={{ fontSize: 11 }}>Questionário de Marca</span>
+          <img src={LOGO} alt="Melo" style={{ height: 28, width: 'auto' }} />
+          {company && <span className="badge badge-amber" style={{ fontSize: 11 }}>{company}</span>}
         </div>
 
         <div style={{ marginBottom: '1.75rem' }}>
@@ -222,21 +230,28 @@ export default function Questionario() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: '2.5rem' }}>
-          {[
-            { href: 'https://wa.me/5511954387151', title: 'WhatsApp' },
-            { href: 'https://www.melocreative.com.br', title: 'Site' },
-            { href: 'https://www.linkedin.com/company/amelocreative', title: 'LinkedIn' },
-            { href: 'https://instagram.com/amelocreative', title: 'Instagram' },
-          ].map(({ href, title }) => (
-            <a key={title} href={href} target="_blank" rel="noopener noreferrer"
+          {SOCIALS.map(({ href, label }) => (
+            <a key={label} href={href} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 11, color: 'var(--text3)', textDecoration: 'none' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--amber)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
-              {title}
+              {label}
             </a>
           ))}
         </div>
       </div>
     </main>
+  )
+}
+
+export default function Questionario() {
+  return (
+    <Suspense fallback={
+      <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="spin" />
+      </main>
+    }>
+      <QuestionarioInner />
+    </Suspense>
   )
 }
